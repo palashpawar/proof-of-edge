@@ -1,0 +1,22 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# node
+node_modules/
+dist/
+.next/
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/**/dry-run/
+contracts/broadcast/*/31337/
+
+# local data
+data/
+*.sqlite
+*.db
+
+.DS_Store
