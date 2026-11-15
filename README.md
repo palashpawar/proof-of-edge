@@ -20,11 +20,19 @@ If `Δ > 0` the buyer pays the seller `k·Δ`; if `Δ < 0` the seller pays the b
 
 All three properties are checked by fuzz tests in [`contracts/test/EdgeEscrow.t.sol`](contracts/test/EdgeEscrow.t.sol).
 
+## Deployed (Arc Testnet, chain ID 5042002)
+
+| Contract | Address |
+|---|---|
+| `EdgeEscrow` (source verified) | [`0x288a40f4aa06C0A382aA790d4b27857FcF9EF54F`](https://explorer.testnet.arc.io/address/0x288a40f4aa06C0A382aA790d4b27857FcF9EF54F) |
+| USDC (ERC-20 interface, 6 decimals; used as-is) | `0x3600000000000000000000000000000000000000` |
+
 ## Repository layout
 
 | Path | What |
 |---|---|
 | `contracts/` | Foundry project: `EdgeEscrow.sol`, tests, deploy script |
+| `services/` | TypeScript (viem): Arc client, Gemini market data, quote signing, forecasters, smoke test |
 | `scripts/` | Testnet wallet generation and faucet distribution |
 
 ## Contracts
@@ -46,3 +54,13 @@ forge script script/Deploy.s.sol --rpc-url arc_testnet --broadcast --with-gas-pr
 ```
 
 Arc silently drops transactions priced under 20 gwei, so always set the gas price.
+
+## Smoke test: one live swap
+
+Requires Node 22+. Runs a full edge swap against the soonest Gemini 5-minute crypto market with a two-sided book: the seller signs a quote, the buyer opens it, the seller reveals, and once Gemini settles the market the resolver posts the outcome and the swap is settled.
+
+```bash
+npm install
+npm run smoke                        # overconfident seller (default)
+SELLER=SELLER_ECHO npm run smoke     # echo seller: always nets zero
+```
