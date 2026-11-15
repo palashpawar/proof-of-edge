@@ -5,12 +5,21 @@
   "scripts": {
     "abi": "node scripts/export-abi.mjs",
     "smoke": "tsx src/smoke-swap.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "marketplace": "tsx src/marketplace.ts",
+    "paid-swap": "tsx src/paid-swap.ts",
+    "sandbox-order": "tsx src/sandbox-order.ts",
+    "settle": "tsx src/settle-swap.ts"
   },
   "dependencies": {
+    "@circle-fin/x402-batching": "4.0.0",
+    "@x402/core": "2.29.0",
+    "@x402/evm": "2.29.0",
+    "express": "5.3.0",
     "viem": "2.57.13"
   },
   "devDependencies": {
+    "@types/express": "5.0.6",
     "@types/node": "22.20.5",
     "tsx": "4.23.15",
     "typescript": "5.9.3"

@@ -1,4 +1,13 @@
-import { encodeAbiParameters, keccak256, stringToBytes, toHex, type Address, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  hashTypedData,
+  keccak256,
+  stringToBytes,
+  toHex,
+  verifyTypedData,
+  type Address,
+  type Hex,
+} from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { SCALE, arcTestnet } from "./config.ts";
 
@@ -14,6 +23,30 @@ export interface Quote {
   commit: Hex;
   nonce: bigint;
 }
+
+/** JSON-safe form (bigints as decimal strings) for the HTTP API. */
+export type WireQuote = Omit<Quote, "stake" | "expiry" | "revealDeadline" | "nonce"> & {
+  stake: string;
+  expiry: string;
+  revealDeadline: string;
+  nonce: string;
+};
+
+export const toWire = (q: Quote): WireQuote => ({
+  ...q,
+  stake: q.stake.toString(),
+  expiry: q.expiry.toString(),
+  revealDeadline: q.revealDeadline.toString(),
+  nonce: q.nonce.toString(),
+});
+
+export const fromWire = (q: WireQuote): Quote => ({
+  ...q,
+  stake: BigInt(q.stake),
+  expiry: BigInt(q.expiry),
+  revealDeadline: BigInt(q.revealDeadline),
+  nonce: BigInt(q.nonce),
+});
 
 export const QUOTE_TYPES = {
   Quote: [
@@ -40,11 +73,26 @@ export function commitmentOf(marketId: Hex, p: number, salt: Hex): Hex {
   return keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint32" }, { type: "bytes32" }], [marketId, p, salt]));
 }
 
+/** The swap id EdgeEscrow will assign: the quote's EIP-712 digest. */
+export const swapIdOf = (escrow: Address, q: Quote): Hex =>
+  hashTypedData({ domain: escrowDomain(escrow), types: QUOTE_TYPES, primaryType: "Quote", message: q });
+
 export const randomSalt = (): Hex => toHex(crypto.getRandomValues(new Uint8Array(32)));
 export const randomNonce = (): bigint => BigInt(toHex(crypto.getRandomValues(new Uint8Array(8))));
 
 export function signQuote(seller: PrivateKeyAccount, escrow: Address, quote: Quote): Promise<Hex> {
   return seller.signTypedData({ domain: escrowDomain(escrow), types: QUOTE_TYPES, primaryType: "Quote", message: quote });
+}
+
+export function verifyQuoteSignature(escrow: Address, quote: Quote, signature: Hex): Promise<boolean> {
+  return verifyTypedData({
+    address: quote.seller,
+    domain: escrowDomain(escrow),
+    types: QUOTE_TYPES,
+    primaryType: "Quote",
+    message: quote,
+    signature,
+  });
 }
 
 /** Probability (0..1) → ppm, clamped to the open interval the contract accepts for mRef. */

@@ -17,12 +17,53 @@ export function walletFor(role: Role) {
   return createWalletClient({ account: accountFor(role), chain: arcTestnet, transport: http() });
 }
 
+// One in-flight transaction per account, so concurrent callers never race on the nonce.
+const queues = new Map<Role, Promise<unknown>>();
+export function serial<T>(role: Role, fn: () => Promise<T>): Promise<T> {
+  const next = (queues.get(role) ?? Promise.resolve()).then(fn, fn);
+  queues.set(role, next.catch(() => undefined));
+  return next;
+}
+
+export const Status = { None: 0, Open: 1, Revealed: 2, Settled: 3 } as const;
+
+export interface SwapState {
+  buyer: Address;
+  stake: bigint;
+  seller: Address;
+  revealDeadline: bigint;
+  mRef: number;
+  p: number;
+  status: number;
+  marketId: Hex;
+  commit: Hex;
+}
+
+export async function readSwap(swapId: Hex): Promise<SwapState> {
+  const [buyer, stake, seller, revealDeadline, mRef, p, status, marketId, commit] = await publicClient.readContract({
+    address: escrowAddress(),
+    abi: edgeEscrowAbi,
+    functionName: "swaps",
+    args: [swapId],
+  });
+  return { buyer, stake, seller, revealDeadline, mRef, p, status, marketId, commit };
+}
+
 /** Simulates, sends and waits for an EdgeEscrow call; throws with the decoded revert reason on failure. */
-export async function sendEscrow(
+export function sendEscrow(
   role: Role,
   functionName: string,
   args: readonly unknown[],
   label = functionName,
+): Promise<TransactionReceipt> {
+  return serial(role, () => sendEscrowNow(role, functionName, args, label));
+}
+
+async function sendEscrowNow(
+  role: Role,
+  functionName: string,
+  args: readonly unknown[],
+  label: string,
 ): Promise<TransactionReceipt> {
   const wallet = walletFor(role);
   const { request } = await publicClient.simulateContract({

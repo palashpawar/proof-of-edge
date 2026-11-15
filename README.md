@@ -55,6 +55,27 @@ forge script script/Deploy.s.sol --rpc-url arc_testnet --broadcast --with-gas-pr
 
 Arc silently drops transactions priced under 20 gwei, so always set the gas price.
 
+## Marketplace (x402 on Arc)
+
+Forecast sellers sit behind [x402](https://x402.org) paywalls settled by Circle Gateway nanopayments on Arc Testnet (`eip155:5042002`). Each quote costs $0.001, paid gas-free from the buyer's Gateway balance straight to that seller's address.
+
+| Route | Paid | What |
+|---|---|---|
+| `GET /sellers` | free | Catalog: seller id, address, fee, bond in escrow, description |
+| `GET /markets` | free | Live Gemini 5/15-minute markets a seller will quote |
+| `GET /forecast/:seller/:symbol?stake=1` | **x402** | EIP-712 quote bound to the paying address, with the forecast committed |
+
+Everything that could make a seller refuse (unknown market, wide or one-sided book, under 60 s left, stake over the cap, seller bond too low) is checked **before** the paywall, so a buyer is never charged for a refused quote. Once the buyer opens the swap on-chain, the seller reveals automatically.
+
+Sellers: `echo` repeats the market mid, `vol` is a digital-option model (live Gemini spot and 60-minute realised volatility), and `overconfident` pushes the market 20 points away from 50/50.
+
+The buyer (`services/src/buyer.ts`) enforces hard limits in code before money moves: at most $0.01 per quote (checked in Circle's `onBeforePaymentCreation` hook), at most 2 USDC per swap, and a quote is refused unless it is bound to the buyer, signed by the seller, has the expected swap id, and its reference price is within 2 points of the live Gemini mid.
+
+```bash
+npm run marketplace                  # http://localhost:8811
+SELLER_ID=vol npm run paid-swap      # discover → pay → check → open → reveal → settle
+```
+
 ## Smoke test: one live swap
 
 Requires Node 22+. Runs a full edge swap against the soonest Gemini 5-minute crypto market with a two-sided book: the seller signs a quote, the buyer opens it, the seller reveals, and once Gemini settles the market the resolver posts the outcome and the swap is settled.

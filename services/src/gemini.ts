@@ -32,10 +32,24 @@ export interface GeminiEvent {
   contracts: GeminiContract[];
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${DATA_BASE}${path}`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Gemini ${path}: HTTP ${res.status}`);
-  return (await res.json()) as T;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** GET with retries on network errors, 429 and 5xx (Gemini returns occasional 503s). */
+async function getJson<T>(path: string, attempts = 4): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${DATA_BASE}${path}`, { headers: HEADERS });
+      if (res.ok) return (await res.json()) as T;
+      last = new Error(`Gemini ${path}: HTTP ${res.status}`);
+      if (res.status !== 429 && res.status < 500) throw last;
+    } catch (err) {
+      last = err;
+      if (err instanceof Error && /HTTP 4\d\d/.test(err.message) && !/HTTP 429/.test(err.message)) throw err;
+    }
+    await sleep(1_000 * 2 ** i);
+  }
+  throw last;
 }
 
 export async function activeCryptoEvents(): Promise<GeminiEvent[]> {

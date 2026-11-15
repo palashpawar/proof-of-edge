@@ -7,7 +7,11 @@
   "scripts": {
     "abi": "npm run abi -w services",
     "smoke": "npm run smoke -w services",
-    "typecheck": "npm run typecheck -w services"
+    "typecheck": "npm run typecheck -w services",
+    "marketplace": "npm run marketplace -w services",
+    "paid-swap": "npm run paid-swap -w services",
+    "sandbox-order": "npm run sandbox-order -w services",
+    "settle": "npm run settle -w services --"
   },
   "engines": {
     "node": ">=22"

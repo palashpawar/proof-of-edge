@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { formatUnits, type Hex } from "viem";
 import { chainTime, ensureDeposit, escrowBalance, escrowEvents, publicClient, sendEscrow } from "./chain.ts";
 import { Outcome, ROOT, accountFor, addressUrl, escrowAddress, type Role } from "./config.ts";
-import { echo, overconfident, type Forecaster } from "./forecasters.ts";
+import { SELLER_SPECS, type Forecaster } from "./forecasters.ts";
 import {
   activeCryptoEvents,
   bookOf,
@@ -26,11 +26,10 @@ const MAX_SPREAD = 0.1;
 const MIN_TIME_LEFT_S = 90;
 const SERIES_PREFERENCE = ["BTC05M", "ETH05M", "SOL05M", "XRP05M", "BTC15M", "ETH15M"];
 
-const SELLERS: Partial<Record<Role, Forecaster>> = { SELLER_OVERCONFIDENT: overconfident, SELLER_ECHO: echo };
 const sellerRole = (process.env.SELLER ?? "SELLER_OVERCONFIDENT") as Role;
-const chosen = SELLERS[sellerRole];
-if (!chosen) throw new Error(`SELLER must be one of ${Object.keys(SELLERS).join(", ")}`);
-const forecast: Forecaster = chosen;
+const chosen = SELLER_SPECS.find((s) => s.role === sellerRole);
+if (!chosen) throw new Error(`SELLER must be one of ${SELLER_SPECS.map((s) => s.role).join(", ")}`);
+const forecast: Forecaster = chosen.forecaster;
 
 const usd = (units: bigint) => formatUnits(units, 6);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -95,7 +94,7 @@ async function main() {
   console.log(`  YES book ${book.bid.toFixed(2)} / ${book.ask.toFixed(2)} → m = ${fromPpm(mRef).toFixed(3)}, expires ${event.expiryDate}`);
 
   console.log("3. Quote (signed by seller, forecast committed)");
-  const p = forecast(mRef);
+  const p = await forecast({ mRef, event, contract });
   const salt = randomSalt();
   const now = await chainTime();
   const quote: Quote = {
