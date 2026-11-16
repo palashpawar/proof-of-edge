@@ -62,7 +62,7 @@
 
   <section>
     <h2>Seller leaderboard</h2>
-    <p class="sub">Settled edge swaps per seller. Mean edge is the average Brier improvement over the Gemini market price; a seller with no information beyond the market scores exactly zero.</p>
+    <p class="sub">Settled edge swaps per seller. Mean edge is the average Brier improvement over the Gemini market price; a seller with no information beyond the market scores exactly zero. The last row is read live from Arc's ERC-8004 Reputation Registry (agent id · feedback count · mean), so it doesn't depend on this server.</p>
     <div class="grid" id="sellers"></div>
   </section>
 
@@ -109,6 +109,9 @@
           <span>95% CI</span><span class="num">${ci}</span>
           <span>Beat market</span><span class="num">${st ? `${st.wins}/${st.n}` : "–"}</span>
           <span>Net USDC</span><span class="num">${st ? signed(st.netUsdc) : "–"}</span>
+          <span>On Arc (ERC-8004)</span><span class="num">${x.erc8004
+            ? `<a href="${s.explorer}/token/${s.identityRegistry}/instance/${x.erc8004.agentId}" target="_blank" rel="noopener">#${x.erc8004.agentId}</a> · ${x.erc8004.count} · ${signed(x.erc8004.meanEdge)}`
+            : "–"}</span>
         </div></div>`;
     }).join("");
 

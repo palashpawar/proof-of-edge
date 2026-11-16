@@ -15,7 +15,8 @@
     "agent": "npm run agent -w services --",
     "collect": "npm run collect -w services --",
     "test": "npm run test -w services",
-    "stream:create": "npm run stream:create -w services"
+    "stream:create": "npm run stream:create -w services",
+    "erc8004:register": "npm run erc8004:register -w services"
   },
   "engines": {
     "node": ">=22"

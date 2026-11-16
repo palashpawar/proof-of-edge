@@ -6,6 +6,11 @@ import { chainTime, sendEscrow } from "./chain.ts";
 import { eventTickerOf, getEvent, resolutionOf } from "./gemini.ts";
 import { swaps } from "./indexer.ts";
 import { postOutcome, settleSwap } from "./settlement.ts";
+import { accountFor } from "./config.ts";
+import { agentIds, alreadyPosted, postFeedback } from "./erc8004.ts";
+import { SELLER_SPECS } from "./forecasters.ts";
+
+const sellerIdByAddress = new Map(SELLER_SPECS.map((s) => [accountFor(s.role).address, s.id]));
 
 const failures = new Map<Hex, number>();
 let running = false;
@@ -36,6 +41,18 @@ export async function keeperTick() {
       } else if (row.status === "Revealed" && row.symbol) {
         unresolved.add(row.symbol);
       }
+    }
+
+    // ERC-8004: publish each settled edge score as reputation feedback (a few per tick).
+    let feedbackBudget = 3;
+    for (const row of swaps.values()) {
+      if (feedbackBudget <= 0) break;
+      if (row.status !== "Settled" || row.outcome === "Void" || row.edgeScore === null || !row.settleTx) continue;
+      const sellerId = sellerIdByAddress.get(row.seller);
+      if (!sellerId || agentIds[sellerId] === undefined || alreadyPosted(row.swapId)) continue;
+      feedbackBudget--;
+      const { swapId, edgeScore, settleTx } = row;
+      await attempt(swapId, "feedback", () => postFeedback({ sellerId, swapId, edgeScore, settleTx }));
     }
 
     for (const symbol of unresolved) {

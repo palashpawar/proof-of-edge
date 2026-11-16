@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ingestRawLogs, leaderboard, onSwapEvent, rememberSymbol, startIndexer, stream, swaps, type RawLog } from "./indexer.ts";
 import { startKeeper } from "./keeper.ts";
+import { IDENTITY_REGISTRY, onchainSummary, registrationFile } from "./erc8004.ts";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
 import { formatUnits, getAddress, isAddress, parseUnits, type Hex } from "viem";
@@ -255,17 +256,42 @@ function tail(file: string, n: number): unknown[] {
   return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).slice(-n).map((l) => JSON.parse(l));
 }
 
-app.get("/api/state", (_req, res) => {
+// ERC-8004 registration files (each seller's agentURI points here).
+app.get("/agents/:file", (req, res) => {
+  const reg = registrationFile(String(req.params.file).replace(/\.json$/, ""));
+  if (!reg) return res.status(404).json({ error: "unknown agent" });
+  res.json(reg);
+});
+
+// getSummary is a view call per seller; refresh at most every 30 s.
+let onchainCache = { at: 0, data: {} as Record<string, Awaited<ReturnType<typeof onchainSummary>>> };
+async function onchainReputation() {
+  if (Date.now() - onchainCache.at > 30_000) {
+    const entries = await Promise.all(SELLER_SPECS.map(async (s) => [s.id, await onchainSummary(s.id).catch(() => null)] as const));
+    onchainCache = { at: Date.now(), data: Object.fromEntries(entries) };
+  }
+  return onchainCache.data;
+}
+
+app.get("/api/state", async (_req, res) => {
   const ids = new Map(SELLER_SPECS.map((s) => [accountFor(s.role).address, s.id]));
   const stats = leaderboard();
+  const onchain = await onchainReputation();
   res.json({
     escrow: escrowAddress(),
     explorer: EXPLORER,
     fee: FEE,
     stream,
+    identityRegistry: IDENTITY_REGISTRY,
     sellers: SELLER_SPECS.map((s) => {
       const address = accountFor(s.role).address;
-      return { id: s.id, address, description: s.description, stats: stats.find((x) => x.address === address) ?? null };
+      return {
+        id: s.id,
+        address,
+        description: s.description,
+        stats: stats.find((x) => x.address === address) ?? null,
+        erc8004: onchain[s.id] ?? null,
+      };
     }),
     swaps: [...swaps.values()]
       .sort((a, b) => b.openedBlock - a.openedBlock)

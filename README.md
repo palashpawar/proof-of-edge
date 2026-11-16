@@ -101,6 +101,25 @@ The leaderboard (dashboard and `/api/state`) reports each seller's settled swaps
 - **x402 on Arc via Circle Gateway.** Quote fees use `@circle-fin/x402-batching`: the seller middleware accepts `eip155:5042002` through the testnet Gateway facilitator, and the buyer pays from a Gateway deposit with `GatewayClient`, so sub-cent fees are viable.
 - **Arc specifics handled:** USDC through its ERC-20 interface (6 decimals, never mixed with the 18-decimal native balance); every transaction priced above Arc's 20 gwei floor; `eth_getLogs` paged in 5,000-block chunks; contract verified on the Arc explorer.
 
+### Seller reputation on Arc (ERC-8004)
+
+Every seller is registered in Arc's ERC-8004 **Identity Registry**, and every settled edge score is published to the ERC-8004 **Reputation Registry**, so any agent can check a seller's track record on-chain without trusting our server.
+
+| Seller | ERC-8004 agent id | Registration file |
+|---|---|---|
+| `echo` | [#897928](https://explorer.testnet.arc.io/token/0x8004A818BFB912233c491871b3d84c89A494BD9e/instance/897928) | [`/agents/echo.json`](https://spend.panther-kingsnake.ts.net:8443/agents/echo.json) |
+| `vol` | [#897929](https://explorer.testnet.arc.io/token/0x8004A818BFB912233c491871b3d84c89A494BD9e/instance/897929) | [`/agents/vol.json`](https://spend.panther-kingsnake.ts.net:8443/agents/vol.json) |
+| `overconfident` | [#897930](https://explorer.testnet.arc.io/token/0x8004A818BFB912233c491871b3d84c89A494BD9e/instance/897930) | [`/agents/overconfident.json`](https://spend.panther-kingsnake.ts.net:8443/agents/overconfident.json) |
+
+- **Identity:** each seller registers itself (`register(agentURI)`), so it owns its agent NFT. Its registration file lists the x402 endpoint and its Arc wallet.
+- **Feedback:** after each settlement the keeper's resolver wallet calls `giveFeedback(agentId, Δ, 6, "edgeScore", "proof-of-edge", endpoint, settleTxUrl, swapId)`. ERC-8004's value is a **signed** fixed-point number, so Δ goes on-chain as is, negative scores included; the feedback hash is the swap id and the URI is the settle transaction, so every entry points to its evidence. The registry blocks self-feedback, so a seller can't rate itself.
+- **Reading it:** `getSummary(agentId, [resolver], "edgeScore", "")` on the Reputation Registry returns the feedback count and the seller's average edge; the dashboard shows this next to our own leaderboard. Filtering by client address is how ERC-8004 lets a reader decide whose ratings to trust: here, the escrow's resolver.
+
+| Contract | Address |
+|---|---|
+| ERC-8004 Identity Registry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| ERC-8004 Reputation Registry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+
 ## Use of Gemini
 
 - **Market data:** `GET /v1/prediction-markets/events` (5/15-minute BTC, ETH, SOL, XRP "Up" markets), per-contract `bestBid`/`bestAsk` and reference strike for the seller's reference price `m`, and `/v1/prediction-markets/events/{ticker}` (`resolutionSide`, ~5 s after expiry) as the oracle for settlement.
@@ -172,6 +191,7 @@ One Node process (`npm run marketplace`) serves the x402 routes, the dashboard, 
 | `services/src/buyer.ts` | Gateway client, fee cap, quote verification |
 | `services/src/forecasters.ts`, `spot.ts` | `echo`, `vol`, `overconfident` |
 | `services/src/indexer.ts`, `keeper.ts`, `settlement.ts` | Event index + leaderboard, automatic settlement |
+| `services/src/erc8004.ts`, `erc8004-agents.json` | ERC-8004 registration files, seller agent ids, reputation feedback |
 | `services/src/gemini.ts`, `gemini-trade.ts`, `markets.ts` | Gemini data and sandbox trading |
 | `services/quicknode/filter.js` | QuickNode Streams filter |
 | `services/public/index.html` | Dashboard |
@@ -194,6 +214,7 @@ scripts/distribute.sh --send
 # put the address in EDGE_ESCROW_ADDRESS, plus GEMINI_API_KEY/SECRET (sandbox),
 # ANTHROPIC_API_KEY and QUICKNODE_API_KEY
 
+npm run erc8004:register                       # one-time: sellers register in Arc's ERC-8004 Identity Registry
 npm run marketplace                            # http://localhost:8811 — dashboard, x402 routes, keeper
 PUBLIC_URL=https://your-host npm run stream:create   # QuickNode Stream → /streams/arc (restart marketplace after)
 npm run agent -- --rounds 3                    # Claude buyer agent
@@ -208,5 +229,5 @@ Arc silently drops transactions priced under 20 gwei, so scripts always set the 
 
 - Any forecast API (weather nowcasts, injury news, macro prints) as a seller, with the same contract.
 - Signed Gemini settlement attestations to remove the trusted resolver.
-- Seller reputation posted to Arc's ERC-8004 Reputation Registry, so other agents can read it without trusting our indexer.
+- Buyer agents that read sellers' ERC-8004 reputation before their first purchase, and size stakes from it.
 - Time-weighted reference prices and per-seller stake limits that grow with proven edge.
