@@ -6,13 +6,16 @@
 //   GET /forecast/:seller/:symbol        x402  signed quote with a committed forecast, bound to the payer
 //
 // After the buyer opens the swap on-chain, the seller reveals its forecast automatically.
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ingestRawLogs, leaderboard, onSwapEvent, rememberSymbol, startIndexer, stream, swaps, type RawLog } from "./indexer.ts";
+import { startKeeper } from "./keeper.ts";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
 import { formatUnits, getAddress, isAddress, parseUnits, type Hex } from "viem";
 import { Status, chainTime, ensureDeposit, escrowBalance, readSwap, sendEscrow } from "./chain.ts";
-import { ROOT, accountFor, addressUrl, escrowAddress } from "./config.ts";
+import { EXPLORER, ROOT, accountFor, addressUrl, escrowAddress } from "./config.ts";
 import { SELLER_SPECS, type SellerSpec } from "./forecasters.ts";
 import { MAX_SPREAD, MIN_SECONDS_LEFT, isQuotable, loadMarket, shortMarkets, type Market } from "./markets.ts";
 import { commitmentOf, marketIdOf, randomNonce, randomSalt, signQuote, swapIdOf, toPpm, toWire, type Quote } from "./quote.ts";
@@ -133,6 +136,7 @@ function quoteHandler(spec: SellerSpec) {
     const symbol = market.contract.instrumentSymbol;
 
     const marketId = marketIdOf(symbol);
+    rememberSymbol(marketId, symbol);
     const mRef = toPpm(market.book.mid);
     const p = await spec.forecaster({ mRef, event: market.event, contract: market.contract });
     const salt = randomSalt();
@@ -210,6 +214,60 @@ app.get("/markets", async (_req, res) => {
   );
 });
 
+// QuickNode Streams webhook: Arc Testnet escrow logs, signed HMAC-SHA256(token, nonce + timestamp + body).
+// Replays are harmless because ingestRawLogs is idempotent.
+app.post("/streams/arc", express.text({ type: "*/*", limit: "5mb" }), (req, res) => {
+  const token = process.env.QUICKNODE_STREAM_TOKEN;
+  if (!token) return res.status(503).json({ error: "QUICKNODE_STREAM_TOKEN not configured" });
+  const nonce = req.get("x-qn-nonce");
+  const timestamp = req.get("x-qn-timestamp");
+  const signature = req.get("x-qn-signature");
+  if (!nonce || !timestamp || !signature || typeof req.body !== "string") return res.status(400).json({ error: "missing signature headers" });
+  const expected = Buffer.from(createHmac("sha256", token).update(nonce + timestamp + req.body).digest("hex"));
+  const given = Buffer.from(signature);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return res.status(401).json({ error: "bad signature" });
+
+  let body: unknown;
+  try {
+    body = JSON.parse(req.body);
+  } catch {
+    return res.status(400).json({ error: "body is not JSON" });
+  }
+  const b = body as { logs?: RawLog[]; data?: { logs?: RawLog[] } } | RawLog[];
+  const logs = Array.isArray(b) ? b : (b.logs ?? b.data?.logs ?? []);
+  stream.webhookBatches++;
+  stream.lastWebhookAt = new Date().toISOString();
+  res.json({ ok: true, fresh: ingestRawLogs(logs, "stream") });
+});
+
+const agentLog = resolve(ROOT, "data/agent-log.jsonl");
+function tail(file: string, n: number): unknown[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).slice(-n).map((l) => JSON.parse(l));
+}
+
+app.get("/api/state", (_req, res) => {
+  const ids = new Map(SELLER_SPECS.map((s) => [accountFor(s.role).address, s.id]));
+  const stats = leaderboard();
+  res.json({
+    escrow: escrowAddress(),
+    explorer: EXPLORER,
+    fee: FEE,
+    stream,
+    sellers: SELLER_SPECS.map((s) => {
+      const address = accountFor(s.role).address;
+      return { id: s.id, address, description: s.description, stats: stats.find((x) => x.address === address) ?? null };
+    }),
+    swaps: [...swaps.values()]
+      .sort((a, b) => b.openedBlock - a.openedBlock)
+      .slice(0, 100)
+      .map((r) => ({ ...r, sellerId: ids.get(r.seller) ?? null })),
+    agent: tail(agentLog, 80),
+  });
+});
+
+app.use(express.static(resolve(ROOT, "services/public")));
+
 for (const spec of SELLER_SPECS) {
   const gateway = createGatewayMiddleware({
     sellerAddress: accountFor(spec.role).address,
@@ -228,6 +286,13 @@ export async function onSwapOpened(swapId: Hex) {
 async function main() {
   console.log("Topping up seller bonds…");
   for (const spec of SELLER_SPECS) await ensureDeposit(spec.role, SELLER_BOND);
+  console.log("Indexing escrow events…");
+  onSwapEvent((row, event) => {
+    if (event === "opened") void onSwapOpened(row.swapId); // Stream (or poll) delivery triggers the reveal
+  });
+  await startIndexer();
+  console.log(`  ${swaps.size} swaps indexed`);
+  startKeeper();
   setInterval(() => void sweep(), SWEEP_MS);
   app.listen(PORT, () => {
     console.log(`Proof of Edge marketplace on http://localhost:${PORT}  (escrow ${escrowAddress()}, fee ${FEE})`);

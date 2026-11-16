@@ -2,7 +2,7 @@
 import type { Hex, TransactionReceipt } from "viem";
 import { edgeEscrowAbi } from "./abi/EdgeEscrow.ts";
 import { escrowEvents, publicClient, sendEscrow } from "./chain.ts";
-import { Outcome, escrowAddress } from "./config.ts";
+import { Outcome, escrowAddress, type Role } from "./config.ts";
 import type { Resolution } from "./gemini.ts";
 import { marketIdOf } from "./quote.ts";
 
@@ -26,8 +26,8 @@ export interface Settlement {
   payment: bigint;
 }
 
-export async function settleSwap(swapId: Hex): Promise<Settlement> {
-  const receipt = await sendEscrow("BUYER", "settle", [swapId], "settle");
+export async function settleSwap(swapId: Hex, role: Role = "BUYER"): Promise<Settlement> {
+  const receipt = await sendEscrow(role, "settle", [swapId], "settle");
   const log = escrowEvents(receipt).find((l) => l.eventName === "SwapSettled");
   const { edgeScore, payment } = (log?.args ?? { edgeScore: 0n, payment: 0n }) as { edgeScore: bigint; payment: bigint };
   return { receipt, edgeScore, payment };
