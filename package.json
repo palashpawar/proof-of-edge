@@ -20,7 +20,8 @@
     "video:voices": "cd video && node --env-file=../.env.local voices.mjs",
     "video:narrate": "cd video && node --env-file=../.env.local narrate.mjs",
     "video:record": "cd video && node record.mjs",
-    "video:build": "cd video && node assemble.mjs"
+    "video:build": "cd video && node assemble.mjs",
+    "video:thumbnail": "cd video && node thumbnail.mjs"
   },
   "engines": {
     "node": ">=22"
