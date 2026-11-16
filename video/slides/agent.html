@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Buyer agent</title><link rel="stylesheet" href="style.css">
+<style>
+  .term { background: #0a0c10; border: 1px solid var(--line); border-radius: 14px; padding: 26px 30px; font: 19px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; height: 620px; overflow: hidden; }
+  .bar { color: var(--muted); font-size: 16px; margin-bottom: 14px; }
+  .line { white-space: pre-wrap; margin: 0 0 6px; }
+  .k-think { color: #c9d1d9; } .k-paid { color: var(--good); } .k-trade { color: var(--accent); } .k-blocked { color: var(--bad); } .k-info { color: var(--muted); }
+  .k { display: inline-block; min-width: 92px; }
+</style></head>
+<body><div class="stage">
+  <h2 style="font-size:32px;margin-bottom:16px">Claude buyer agent · <span style="color:var(--muted);font-weight:400">npm run agent</span></h2>
+  <div class="term"><div class="bar">claude-opus-5-5 · policy engine enforces every purchase and order</div><div id="out"></div></div>
+</div>
+<script>
+  // Lines are injected by record.mjs: play([{kind, text}], durationMs)
+  window.play = (lines, ms) => {
+    const out = document.getElementById("out");
+    const step = ms / (lines.length + 1);
+    lines.forEach((l, i) => setTimeout(() => {
+      const div = document.createElement("div");
+      div.className = `line k-${l.kind}`;
+      div.innerHTML = `<span class="k">[${l.kind}]</span>`;
+      div.append(document.createTextNode(l.text));
+      out.append(div);
+      out.parentElement.scrollTo({ top: out.parentElement.scrollHeight, behavior: "smooth" }); // like a real terminal
+    }, step * i));
+  };
+</script></body></html>

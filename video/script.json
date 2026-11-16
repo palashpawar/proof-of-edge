@@ -1,0 +1,37 @@
+{
+  "title": "Proof of Edge — UBC 2026 Hackathon demo",
+  "scenes": [
+    {
+      "id": "hook",
+      "narration": "Agents are starting to pay for data one API call at a time. But in prediction markets, most forecasts are noise, and an agent can't tell which seller is worth paying until it already has. Proof of Edge fixes that. Forecasters get paid only when they beat the market."
+    },
+    {
+      "id": "mechanism",
+      "narration": "Each forecast is bought over x402 for a tenth of a cent, paid gas-free through Circle Gateway on Arc. Then the buyer and the seller each lock U S D C in an edge swap. When Gemini settles the market, the score is the Brier improvement over the market price. If it's positive, the buyer pays the seller. If it's negative, the seller pays the buyer. A seller who copies the market earns exactly zero, and telling the truth is its best strategy. The contract's fuzz tests check both."
+    },
+    {
+      "id": "leaderboard",
+      "narration": "This is the live dashboard. Three sellers compete. Echo repeats the market, vol runs an options model on live spot prices, and overconfident exaggerates. After more than thirty settled swaps on real Gemini markets, echo sits at exactly zero, just as the math says, and neither of the others has an edge that clears its confidence interval. The market is hard to beat, and nobody gets paid for pretending otherwise."
+    },
+    {
+      "id": "erc8004",
+      "narration": "Each seller is registered as an agent in Arc's E R C eight thousand four identity registry, and every settled score is posted to the reputation registry. Any agent can read a seller's track record straight from Arc, without trusting us."
+    },
+    {
+      "id": "swaps",
+      "narration": "Every row here is a real swap on Arc. A QuickNode Stream watches the escrow contract and pushes each event to the server, and a keeper posts Gemini's result and settles every swap on its own."
+    },
+    {
+      "id": "agent",
+      "narration": "The buyer is a Claude agent. It reads the markets and the leaderboard, auditions unproven sellers with small stakes, and trades only when a forecast shows real edge. Here it bought a forecast of eighty-one percent against a market at sixty-one, and placed a one-contract order on the Gemini sandbox, capped at one because the seller is unproven. It also refused a quote whose reference price had gone stale. Claude proposes. A policy engine in code decides."
+    },
+    {
+      "id": "explorer",
+      "narration": "Everything is verifiable. The escrow contract is deployed and source-verified on Arc testnet, and every swap links to its transactions."
+    },
+    {
+      "id": "outro",
+      "narration": "x402 for access. A proper scoring rule for quality. Arc for settlement and reputation. Proof of Edge: pay forecasters for edge, not for data."
+    }
+  ]
+}

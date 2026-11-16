@@ -16,9 +16,17 @@
     "collect": "npm run collect -w services --",
     "test": "npm run test -w services",
     "stream:create": "npm run stream:create -w services",
-    "erc8004:register": "npm run erc8004:register -w services"
+    "erc8004:register": "npm run erc8004:register -w services",
+    "video:voices": "cd video && node --env-file=../.env.local voices.mjs",
+    "video:narrate": "cd video && node --env-file=../.env.local narrate.mjs",
+    "video:record": "cd video && node record.mjs",
+    "video:build": "cd video && node assemble.mjs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "2.75.0",
+    "playwright-core": "1.64.1"
   }
 }

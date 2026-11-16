@@ -21,3 +21,9 @@ data/
 
 .DS_Store
 contracts/broadcast/**/*.recovery.lock
+
+# demo video build outputs
+video/audio/
+video/raw/
+video/out/
+video/samples/

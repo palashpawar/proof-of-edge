@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Edge swap</title><link rel="stylesheet" href="style.css"></head>
+<body><div class="stage">
+  <h2 class="fade">The edge swap</h2>
+  <div class="flow fade" style="animation-delay:.4s">
+    <div class="box"><b>Buyer agent</b>pays $0.001 via x402</div><span class="arrow">→</span>
+    <div class="box"><b>Seller</b>signs quote, commits forecast p</div><span class="arrow">→</span>
+    <div class="box"><b>Arc escrow</b>both lock USDC</div><span class="arrow">→</span>
+    <div class="box"><b>Gemini</b>settles the market</div>
+  </div>
+  <div class="formula fade" style="animation-delay:9s">Δ = (m − y)² − (p − y)²</div>
+  <ul class="fade" style="animation-delay:13s">
+    <li><span class="good">Δ &gt; 0</span>: buyer pays seller stake · Δ</li>
+    <li><span class="bad">Δ &lt; 0</span>: seller pays buyer stake · |Δ|</li>
+    <li>Copying the market (p = m) earns exactly zero; truthful p is optimal</li>
+  </ul>
+</div></body></html>
