@@ -14,7 +14,8 @@
     "settle": "npm run settle -w services --",
     "agent": "npm run agent -w services --",
     "collect": "npm run collect -w services --",
-    "test": "npm run test -w services"
+    "test": "npm run test -w services",
+    "stream:create": "npm run stream:create -w services"
   },
   "engines": {
     "node": ">=22"

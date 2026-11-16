@@ -8,6 +8,7 @@ UBC 2026 Hackathon · **Agentic Payments and AI** · Best use of **Arc** · boun
 
 | | |
 |---|---|
+| Live dashboard | https://spend.panther-kingsnake.ts.net:8443 |
 | Escrow contract (Arc Testnet, source verified) | [`0x288a40f4aa06C0A382aA790d4b27857FcF9EF54F`](https://explorer.testnet.arc.io/address/0x288a40f4aa06C0A382aA790d4b27857FcF9EF54F) |
 | USDC (Arc ERC-20 interface, 6 decimals) | `0x3600000000000000000000000000000000000000` |
 | Circle Gateway Wallet (x402 settlement) | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` |
@@ -114,8 +115,12 @@ The leaderboard (dashboard and `/api/state`) reports each seller's settled swaps
 | Dataset | `block_with_receipts` |
 | Filter | [`services/quicknode/filter.js`](services/quicknode/filter.js): keeps only logs whose address is the EdgeEscrow contract, returns `{ logs }`, skips empty blocks |
 | Destination | Webhook → `POST /streams/arc` on the marketplace, verified with HMAC-SHA256 over `nonce + timestamp + body` using the Stream's security token |
+| Batching | 10 blocks per delivery with elastic batching (Arc has sub-second blocks) |
+| Created by | `PUBLIC_URL=https://… npm run stream:create` ([`quicknode-stream.ts`](services/src/quicknode-stream.ts)), which also generates the security token |
 
-**Why:** the Stream is the event backbone. `SwapOpened` deliveries trigger the seller's reveal immediately; `ForecastRevealed`, `MarketResolved` and `SwapSettled` drive the keeper, the live swap feed and the seller leaderboard. Ingestion is idempotent (keyed by tx hash + log index), so Stream retries and re-deliveries are harmless. An RPC poll runs alongside as a safety net and for backfill.
+**Why:** the Stream is the event backbone. `SwapOpened` deliveries trigger the seller's reveal immediately; `ForecastRevealed`, `MarketResolved` and `SwapSettled` drive the keeper, the live swap feed and the seller leaderboard. Ingestion is idempotent (keyed by tx hash + log index), so Stream retries and re-deliveries are harmless. An RPC poll trails the chain head by ~60 blocks as a gap-filler and for backfill, so the Stream is always the first to deliver.
+
+Two things we learned wiring it up: QuickNode posts **without a `Content-Type` header**, so the webhook reads the raw body for every request (signature verification needs the exact bytes); and a Stream **terminates** once a delivery exhausts its retries, so the webhook must be up before the Stream is created, and retries are set generously (10 × 10 s) to survive a server restart.
 
 ## Architecture
 
@@ -187,9 +192,10 @@ scripts/distribute.sh --send
 (cd contracts && set -a && source ../.env && set +a && \
   forge script script/Deploy.s.sol --rpc-url arc_testnet --broadcast --with-gas-price 25gwei)
 # put the address in EDGE_ESCROW_ADDRESS, plus GEMINI_API_KEY/SECRET (sandbox),
-# ANTHROPIC_API_KEY and QUICKNODE_STREAM_TOKEN
+# ANTHROPIC_API_KEY and QUICKNODE_API_KEY
 
 npm run marketplace                            # http://localhost:8811 — dashboard, x402 routes, keeper
+PUBLIC_URL=https://your-host npm run stream:create   # QuickNode Stream → /streams/arc (restart marketplace after)
 npm run agent -- --rounds 3                    # Claude buyer agent
 npm run collect -- --rounds 10                 # scripted buyer: one quote per seller per round
 SELLER_ID=vol npm run paid-swap                # one swap, narrated step by step

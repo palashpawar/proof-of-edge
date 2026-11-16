@@ -250,7 +250,9 @@ async function round(n: number) {
       try {
         results.push({ type: "tool_result", tool_use_id: use.id, content: await runTool(run, use.name, use.input as Record<string, unknown>) });
       } catch (err) {
-        const msg = err instanceof Error ? err.message.split("\n")[0]! : String(err);
+        let msg = err instanceof Error ? err.message.split("\n")[0]! : String(err);
+        // Gateway's error drops the body; the marketplace only answers 409 when the market isn't quotable.
+        if (/status 409/.test(msg)) msg += " (market not quotable right now: one-sided or >10¢-wide book, or under 60 s left; no fee was charged; try another market)";
         log("blocked", `${use.name} failed: ${msg}`);
         results.push({ type: "tool_result", tool_use_id: use.id, content: msg, is_error: true });
       }

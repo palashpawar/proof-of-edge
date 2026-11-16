@@ -46,6 +46,8 @@ export async function keeperTick() {
         console.error(`keeper resolve ${symbol}: ${err instanceof Error ? err.message.split("\n")[0] : err}`);
       }
     }
+  } catch (err) {
+    console.error(`keeper: ${err instanceof Error ? err.message.split("\n")[0] : err}`); // e.g. RPC unreachable; retry next tick
   } finally {
     running = false;
   }

@@ -174,9 +174,13 @@ async function pollRange(from: bigint, to: bigint) {
   );
 }
 
-/** Catches up from the saved cursor to the chain head in RPC-sized chunks. */
+// The poll trails the head by ~50 s so the QuickNode Stream is the primary, first-arriving feed and the
+// poll only fills gaps. Reveals don't wait on either: the marketplace sweep reads swap state directly.
+const POLL_LAG_BLOCKS = 60n;
+
+/** Catches up from the saved cursor to (head − lag) in RPC-sized chunks. */
 export async function catchUp() {
-  const head = await publicClient.getBlockNumber();
+  const head = (await publicClient.getBlockNumber()) - POLL_LAG_BLOCKS;
   while (cursor <= head) {
     const to = cursor + CHUNK - 1n < head ? cursor + CHUNK - 1n : head;
     await pollRange(cursor, to);

@@ -56,7 +56,12 @@ const revealing = new Set<Hex>();
 
 /** Reveals every pending forecast whose swap is open; drops quotes that expired unopened. */
 async function sweep(only?: Hex) {
-  const now = await chainTime();
+  let now: bigint;
+  try {
+    now = await chainTime();
+  } catch (err) {
+    return console.error(`sweep: RPC unavailable (${err instanceof Error ? err.message.split("\n")[0] : err})`);
+  }
   for (const [swapId, entry] of pending) {
     if ((only && swapId !== only) || revealing.has(swapId)) continue;
     const spec = specById.get(entry.sellerId);
@@ -216,7 +221,8 @@ app.get("/markets", async (_req, res) => {
 
 // QuickNode Streams webhook: Arc Testnet escrow logs, signed HMAC-SHA256(token, nonce + timestamp + body).
 // Replays are harmless because ingestRawLogs is idempotent.
-app.post("/streams/arc", express.text({ type: "*/*", limit: "5mb" }), (req, res) => {
+// QuickNode sends no Content-Type, so match every request (type "*/*" would skip a missing header).
+app.post("/streams/arc", express.text({ type: () => true, limit: "5mb" }), (req, res) => {
   const token = process.env.QUICKNODE_STREAM_TOKEN;
   if (!token) return res.status(503).json({ error: "QUICKNODE_STREAM_TOKEN not configured" });
   const nonce = req.get("x-qn-nonce");
@@ -225,7 +231,10 @@ app.post("/streams/arc", express.text({ type: "*/*", limit: "5mb" }), (req, res)
   if (!nonce || !timestamp || !signature || typeof req.body !== "string") return res.status(400).json({ error: "missing signature headers" });
   const expected = Buffer.from(createHmac("sha256", token).update(nonce + timestamp + req.body).digest("hex"));
   const given = Buffer.from(signature);
-  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return res.status(401).json({ error: "bad signature" });
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+    console.error(`webhook rejected: bad signature (stream ${req.get("stream-id") ?? "?"})`);
+    return res.status(401).json({ error: "bad signature" });
+  }
 
   let body: unknown;
   try {
@@ -283,6 +292,9 @@ export async function onSwapOpened(swapId: Hex) {
   if (pending.has(swapId)) await sweep(swapId);
 }
 
+// A long-running demo server should log a stray async failure (an RPC blip) rather than exit.
+process.on("unhandledRejection", (err) => console.error("unhandled:", err instanceof Error ? err.message.split("\n")[0] : err));
+
 async function main() {
   console.log("Topping up seller bonds…");
   for (const spec of SELLER_SPECS) await ensureDeposit(spec.role, SELLER_BOND);
@@ -300,4 +312,7 @@ async function main() {
   });
 }
 
-void main();
+main().catch((err) => {
+  console.error("startup failed:", err instanceof Error ? err.message.split("\n")[0] : err);
+  process.exit(1); // scripts/serve.sh restarts it
+});

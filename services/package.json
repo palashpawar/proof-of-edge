@@ -12,7 +12,8 @@
     "settle": "tsx src/settle-swap.ts",
     "agent": "tsx src/agent.ts",
     "test": "tsx --test src/*.test.ts",
-    "collect": "tsx src/collect.ts"
+    "collect": "tsx src/collect.ts",
+    "stream:create": "tsx src/quicknode-stream.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.3.0",
